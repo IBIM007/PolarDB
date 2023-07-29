@@ -64,6 +64,23 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   {
     std::cout<<"压缩出错了"<<std::endl;
   }
+  //说明之前已经压缩存进去过了
+  if(size_map.find(page_no)!=size_map.end())
+  {
+    //原来的地方能够装下来，那么直接在原来的地方写入
+    if(size_map[page_no]>=compressLen)
+    {
+      unsigned long originalSize=size_map[page_no];
+      char empty[originalSize];
+      memset(empty,'\0',originalSize);
+      pwrite(fd,empty,originalSize,offset_map[page_no]);
+      size_map[page_no]=compressLen;
+      pwrite(fd,compressBuf,compressLen,offset_map[page_no]);
+      //last最后的追加写位置不变
+      return kSucc;
+    }
+    //放不下，以及原来都没有写过，那么就走下面的逻辑追加写
+  }
 
    size_map[page_no]=compressLen;
    ssize_t nwrite = pwrite(fd, compressBuf, compressLen, last_write);
@@ -74,7 +91,6 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
    offset_map[page_no]=last_write;
    last_write+=compressLen;
 
-  
   return kSucc;
 }
 
