@@ -57,33 +57,30 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   memset(original,'\0',len+20);
   memcpy(original,buf,len);
 
-  uLong compressLen=compressBound(len+1);//现在要压缩的长度默认就是16385了，默认压缩'\0'，需要这样+1。注意compressLen需要先定义好？
+  uLong compressLen=compressBound(len+1);//现在要压缩的长度默认就是16385了，默认压缩最后自己追加的'\0'，需要这样+1。注意compressLen需要先定义好？
   Bytef compressBuf[compressLen];
   memset(compressBuf,'\0',compressLen);
   if(compress(compressBuf,&compressLen,(const Bytef *)original,16384+1)!=Z_OK)
   {
     std::cout<<"压缩出错了"<<std::endl;
-    //return kCompressError;
   }
 
-  /*if(size_map.find(page_no)!=size_map.end())
-  {
-    sum-=size_map[page_no];
-  }*/
    size_map[page_no]=compressLen;
-   //sum+=compressLen;
-
-   ssize_t nwrite = pwrite(fd, compressBuf, compressLen, page_no * page_size);
+   ssize_t nwrite = pwrite(fd, compressBuf, compressLen, last_write);
    if (nwrite != compressLen) {
      return kIOError;
    }
+
+   offset_map[page_no]=last_write;
+   last_write+=compressLen;
+
   
   return kSucc;
 }
 
 RetCode DummyEngine::pageRead(uint32_t page_no, void *buf) {
   memset(buf,'\0',16384);
-  ssize_t nwrite = pread(fd, buf, size_map[page_no], page_no * page_size);//这里有没有可能需要更大的buf来读取
+  ssize_t nwrite = pread(fd, buf, size_map[page_no], offset_map[page_no]);//这里有没有可能需要更大的buf来读取
   if (nwrite != size_map[page_no]) {
     return kIOError;
   }

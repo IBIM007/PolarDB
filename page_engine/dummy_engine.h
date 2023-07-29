@@ -14,6 +14,9 @@ class DummyEngine : public PageEngine  {
   int fd;
   const size_t page_size{16384};
   std::map<uint32_t,unsigned long> size_map;
+  std::map<uint32_t,unsigned long long> offset_map;
+  unsigned long long last_write=0;
+  
   //unsigned long long sum=0;
  public:
   static RetCode Open(const std::string& path, PageEngine** eptr);
