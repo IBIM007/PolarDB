@@ -13,7 +13,7 @@ class DummyEngine : public PageEngine  {
  private:
   int fd;
   const size_t page_size{16384};
-  std::map<uint32_t,unsigned long> size_map;
+  std::map<uint32_t,unsigned short> size_map;//页号可以设置为unsigned short吗？感觉费劲，应该不行，他说的不超过655360，unsigned short最多才65535
   std::map<uint32_t,unsigned long long> offset_map;
   unsigned long long last_write=0;
   

@@ -64,6 +64,8 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   {
     std::cout<<"压缩出错了"<<std::endl;
   }
+  //每次确定用不到了可以早点删除original吗？
+
   //说明之前已经压缩存进去过了
   if(size_map.find(page_no)!=size_map.end())
   {
@@ -73,9 +75,11 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
       unsigned long originalSize=size_map[page_no];
       char empty[originalSize];
       memset(empty,'\0',originalSize);
-      pwrite(fd,empty,originalSize,offset_map[page_no]);
+      pwrite(fd,empty,originalSize,offset_map[page_no]);//两次系统调用，单纯追加写不会两次系统调用
+      //写完后立刻删除empty
       size_map[page_no]=compressLen;
       pwrite(fd,compressBuf,compressLen,offset_map[page_no]);
+      //写完立刻删除compressBuf
       //last最后的追加写位置不变
       return kSucc;
     }

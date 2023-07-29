@@ -70,7 +70,7 @@ int ZEXPORT compress(dest, destLen, source, sourceLen)
     uLongf *destLen;
     const Bytef *source;
     uLong sourceLen;
-{
+{   //这个最高级别可能也会影响内存。
     return compress2(dest, destLen, source, sourceLen, Z_BEST_COMPRESSION);
 }
 
