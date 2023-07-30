@@ -40,10 +40,12 @@ DummyEngine::DummyEngine(const std::string& path) {
   std::cout<<data_file<<std::endl;
   fd = open(data_file.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
   assert(fd >=0);
+  memset(size_map,-1,sizeof(size_map));
+  memset(offset_map,-1,sizeof(offset_map));
 }
 
 DummyEngine::~DummyEngine() {
-  //std::cout<<"sum是："<<sum<<std::endl;
+  
   if (fd >= 0) {
     close(fd);
   }
@@ -53,8 +55,8 @@ DummyEngine::~DummyEngine() {
 RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   uLong len=16384;//还真的必须用uLong这样来搞
   //直接压buf不行，因为如果buf塞满就没有'\0'了，所以过渡一下用original
-  Bytef original[len+20];
-  memset(original,'\0',len+20);
+  Bytef original[len+2];
+  memset(original,'\0',len+2);
   memcpy(original,buf,len);
 
   uLong compressLen=compressBound(len+1);//现在要压缩的长度默认就是16385了，默认压缩最后自己追加的'\0'，需要这样+1。注意compressLen需要先定义好？
@@ -67,7 +69,7 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   //每次确定用不到了可以早点删除original吗？
 
   //说明之前已经压缩存进去过了
-  if(size_map.find(page_no)!=size_map.end())
+  if(size_map[page_no]!=-1)
   {
     //原来的地方能够装下来，那么直接在原来的地方写入
     if(size_map[page_no]>=compressLen)
