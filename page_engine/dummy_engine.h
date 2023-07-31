@@ -23,7 +23,7 @@ class DummyEngine : public PageEngine  {
   short size_map[655362];
   long long offset_map[655362];
   long long last_write=0;
-  unsigned short free_blocks=0; //这个也没有维护好，需要再维护，应该是只比0.29更好的
+  unsigned long free_blocks=0; //这个也没有维护好，需要再维护，应该是只比0.29更好的
   free_block *fake_head=NULL;//头结点不存储任何数据，通过size=0来判断
   //unsigned long long sum=0;
  public:
