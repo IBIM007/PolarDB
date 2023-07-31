@@ -14,8 +14,8 @@ class DummyEngine : public PageEngine  {
   int fd;
   const size_t page_size{16384};
   short size_map[655362];
-  unsigned long long offset_map[655362];
-  unsigned long long last_write=0;
+  long long offset_map[655362];
+  long long last_write=0;
   
   //unsigned long long sum=0;
  public:

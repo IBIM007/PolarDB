@@ -41,7 +41,7 @@ DummyEngine::DummyEngine(const std::string& path) {
   fd = open(data_file.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
   assert(fd >=0);
   memset(size_map,-1,sizeof(size_map));
-  memset(offset_map,-1,sizeof(offset_map));
+  //memset(offset_map,-1,sizeof(offset_map));
 }
 
 DummyEngine::~DummyEngine() {
