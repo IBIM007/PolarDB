@@ -5,9 +5,16 @@
 //#include <zlib.h>
 #include<map>
 #include<string.h>
+#include "zlib.h"
 /*
  * Dummy sample of page engine
  */
+typedef struct FreeBlock
+{
+    long long offset;
+    size_t size;
+    struct FreeBlock *next;
+}free_block;
 
 class DummyEngine : public PageEngine  {
  private:
@@ -16,7 +23,8 @@ class DummyEngine : public PageEngine  {
   short size_map[655362];
   long long offset_map[655362];
   long long last_write=0;
-  
+  unsigned short free_blocks=0; //这个也没有维护好，需要再维护，应该是只比0.29更好的
+  free_block *fake_head=NULL;//头结点不存储任何数据，通过size=0来判断
   //unsigned long long sum=0;
  public:
   static RetCode Open(const std::string& path, PageEngine** eptr);
@@ -29,6 +37,9 @@ class DummyEngine : public PageEngine  {
 //  RetCode pageWrite(uint32_t page_no, void *buf) override;
 
   RetCode pageRead(uint32_t page_no, void *buf) override;
+  void insert_free_block(free_block *head,free_block *insert);
+  bool pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_t page_no);
+  void mergeFree(uint32_t page_no);
 };
 
 #endif  // PAGE_ENGINE_DUMMY_ENGINE_H_
