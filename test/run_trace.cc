@@ -52,8 +52,8 @@ class Visitor {
         {
           std::cout << "Read Page page_no: " << page_no << std::endl;
           RetCode ret = page_engine->pageRead(page_no, page_buf);/*这里读取时读出来到page_buf中。*/
-          std::cout<<"trace_buf读出来是："<<(char*)trace_buf<<std::endl;
-          std::cout<<"page_buf读出来是："<<(char*)page_buf<<std::endl;
+          //std::cout<<"trace_buf读出来是："<<(char*)trace_buf<<std::endl;
+          //std::cout<<"page_buf读出来是："<<(char*)page_buf<<std::endl;
           assert(ret == kSucc);
           assert(memcmp(page_buf, trace_buf, page_size) == 0);/*其功能是把存储区 str1 和存储区 str2 的前 n 个字节进行比较。该函数是按字节比较的，位于string.h*/
           break;
