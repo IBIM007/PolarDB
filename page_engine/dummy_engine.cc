@@ -112,17 +112,17 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
   if(doit==NULL)return false;
   free_block *doitpre=fake_head;
   //现在做简单点，找第一个能装下的立刻返回。
-  /*
+  
   while(doit)
   {
     if(doit->size>=len)break;
     if(doit!=fake_head)doitpre=doitpre->next;
     doit=doit->next;
   }
-  if(doit==NULL)return false;*/
+  if(doit==NULL)return false;
 
   //接下来做找最大块。感觉这种性能最差，时间还可能超了
-  size_t maxlen=doit->size;
+  /*size_t maxlen=doit->size;
   free_block *max=doit;
   free_block *maxpre=doitpre;
   while(doit)
@@ -138,7 +138,7 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
   //if(max==NULL)return false;
   if(max->size<len)return false;
   doit=max;
-  doitpre=maxpre;
+  doitpre=maxpre;*/
 
   //接下来找刚好能装下的一个块，感觉应该是效果最好的
   /*free_block *perfect=doit;
