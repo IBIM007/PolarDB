@@ -208,7 +208,7 @@ void DummyEngine::insert_free_block(free_block *head,free_block *insert)
   }
 }
 
-bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_t page_no)
+bool DummyEngine::pwriteByFreeBlock(size_t len,Bytef *compressBuf,int fd,uint32_t page_no)
 {
   //找空闲块时实际上可以用不同的算法，1找刚好能装下的，2.找第一个能装下的立刻装了返回，3.找最大的size
   free_block *doit=fake_head;
@@ -216,16 +216,16 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
   free_block *doitpre=fake_head;
   //现在做简单点，找第一个能装下的立刻返回。
   //这种方式0.26
-  /*while(doit)
+  while(doit)
   {
     if(doit->size>=len)break;
     if(doit!=fake_head)doitpre=doitpre->next;
     doit=doit->next;
   }
-  if(doit==NULL)return false;*/
+  if(doit==NULL)return false;
 
   //接下来做找最大块。感觉这种性能最差，时间还可能超了
-  size_t maxlen=doit->size;
+  /*size_t maxlen=doit->size;
   free_block *max=doit;
   free_block *maxpre=doitpre;
   while(doit)
@@ -241,7 +241,7 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
   //if(max==NULL)return false;
   if(max->size<len)return false;
   doit=max;
-  doitpre=maxpre;
+  doitpre=maxpre;*/
 
   //接下来找刚好能装下的一个块，感觉应该是效果最好的
   /*free_block *perfect=doit;
@@ -305,12 +305,29 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   //说明之前已经压缩存进去过了,只有这种情况才会开始产生空洞。不管是否大于，都可以变成空闲块，然后统一用空闲块来写，代码会很简洁。
   if(size_map[page_no]!=-1)
   {
+    //超时严重还是只能通过这里如果发现长度大于等于那么，直接写入。再插入空闲区。
+    bool zero=false;
+    if(size_map[page_no]>=compressLen)
+    {
+      if(size_map[page_no]==compressLen)zero=true;
+      pwrite(fd,compressBuf,compressLen,offset_map[page_no]);
+      size_map[page_no]=compressLen;
+      if(!zero)
+      {
+        free_block* new_block=(free_block *)malloc(sizeof(free_block));
+        new_block->offset=offset_map[page_no]+compressLen;
+        new_block->size=size_map[page_no]-compressLen;
+        insert_free_block(fake_head,new_block);
+      }
+      return kSucc;
+    }
+
     free_block* new_block=(free_block *)malloc(sizeof(free_block));
       new_block->offset=offset_map[page_no];
       new_block->size=size_map[page_no];
-      insert_free_block(fake_head,new_block);//只有这里面才能出现合并吧。   
+      insert_free_block(fake_head,new_block);//只有这里面才能出现合并吧。加速可以传一个参数进去，如果是空，那么就去找，如果不是空，那么直接插入并且返回结束。
   }
-  pwriteByFree=pwriteByFreeBolck(compressLen,compressBuf,fd,page_no);
+  pwriteByFree=pwriteByFreeBlock(compressLen,compressBuf,fd,page_no);
 
   //如果不能通过空闲块写入，那么直接追加写
   if(!pwriteByFree)
