@@ -41,22 +41,9 @@ DummyEngine::DummyEngine(const std::string& path) {
   fd = open(data_file.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
   assert(fd >=0);
   memset(size_map,-1,sizeof(size_map));
-  //memset(offset_map,-1,sizeof(offset_map));
 }
 
 DummyEngine::~DummyEngine() {
-  std::cout<<"碎片有这么多："<<free_blocks<<std::endl;
-  FILE* fp = fopen("/proc/self/status", "r");
-    char line[128];
-    while (fgets(line, 128, fp) != NULL)
-    {
-        if (strncmp(line, "VmRSS:", 6) == 0)
-        {
-            printf("当前进程占用内存大小为：%d KB\n", atoi(line + 6));
-            break;
-        }
-    }
-    fclose(fp);
   if (fd >= 0) {
     close(fd);
   }
@@ -76,7 +63,6 @@ void DummyEngine::insert_free_block(free_block *head,free_block *insert)
     {
       if(doit->offset>insert->offset)//相等的情况思考一下会不会出现
       {
-          //insert->next=doit;
           break;
       }
       else
@@ -98,7 +84,7 @@ void DummyEngine::insert_free_block(free_block *head,free_block *insert)
   }
   ++free_blocks;
 }
-//TODO
+
 void DummyEngine::mergeFree(uint32_t page_no)
 {
   if(fake_head==NULL||fake_head->next==NULL)return ;
@@ -123,23 +109,62 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
 {
   //找空闲块时实际上可以用不同的算法，1找刚好能装下的，2.找第一个能装下的立刻装了返回，3.找最大的size
   free_block *doit=fake_head;
+  if(doit==NULL)return false;
   free_block *doitpre=fake_head;
   //现在做简单点，找第一个能装下的立刻返回。
+  /*
   while(doit)
   {
     if(doit->size>=len)break;
     if(doit!=fake_head)doitpre=doitpre->next;
     doit=doit->next;
   }
-  if(doit==NULL)return false;
+  if(doit==NULL)return false;*/
 
+  //接下来做找最大块。感觉这种性能最差，时间还可能超了
+  /*size_t maxlen=doit->size;
+  free_block *max=doit;
+  free_block *maxpre=doitpre;
+  while(doit)
+  {
+    if(doit->size>maxlen)
+    {
+      max=doit;
+      maxpre=doitpre;
+    }
+    if(doit!=fake_head)doitpre=doitpre->next;
+    doit=doit->next;
+  }
+  //if(max==NULL)return false;
+  if(max->size<len)return false;
+  doit=max;
+  doitpre=maxpre;*/
+
+  //接下来找刚好能装下的一个块，感觉应该是效果最好的
+  free_block *perfect=doit;
+  free_block *perfectpre=doitpre;
+  while(doit)
+  {
+    if(doit->size>len&&doit->size<=perfect->size)
+    {
+      perfect=doit;
+      perfectpre=doitpre;
+    }
+    if(doit!=fake_head)doitpre=doitpre->next;
+    doit=doit->next;
+  }
+  if(perfect->size<len)return false;
+  doit=perfect;
+  doitpre=perfectpre;
+
+  
   offset_map[page_no]=doit->offset;
   size_map[page_no]=len;
 
   pwrite(fd,compressBuf,len,doit->offset);
   doit->offset+=len;
   doit->size=doit->size-len;
-  //如果为0还是需要清除掉。清除0，还需要注意头结点问题哦。
+
   if(doit->size==0)
   {
     if(doit==fake_head)
@@ -152,7 +177,7 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
       free(doit);
     }
     --free_blocks;
-    //减少空闲块数
+
   }
   return true;
 }
@@ -177,15 +202,13 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   //说明之前已经压缩存进去过了,只有这种情况才会开始产生空洞。不管是否大于，都可以变成空闲块，然后统一用空闲块来写，代码会很简洁。
   if(size_map[page_no]!=-1)
   {
-    //std::cout<<1<<std::endl;
     //原来的地方能够装下来，那么直接在原来的地方写入，实际上都可以做成统一的空闲块写入，不用这么区分
     if(size_map[page_no]>=compressLen)
     {
-      //std::cout<<2<<std::endl;
       unsigned long originalSize=size_map[page_no];//是否有必要清0，如果不清0的话，后面读对应的字节也可以呀，不用物理清0吧。
       char empty[originalSize];
       memset(empty,'\0',originalSize);
-      pwrite(fd,empty,originalSize,offset_map[page_no]);//两次系统调用，单纯追加写不会两次系统调用
+      pwrite(fd,empty,originalSize,offset_map[page_no]);
 
       size_map[page_no]=compressLen;
       pwrite(fd,compressBuf,compressLen,offset_map[page_no]);
@@ -193,19 +216,17 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
       //转入后看是否有剩余，&&free_blocks<500000
       if(size_map[page_no]!=compressLen)
       {
-        //大小不同才会有空闲块。
         free_block* new_block=(free_block *)malloc(sizeof(free_block));
         new_block->offset=offset_map[page_no]+compressLen;
         new_block->size=size_map[page_no]-compressLen;
         insert_free_block(fake_head,new_block);
-        //mergeFree(page_no);
+        //mergeFree(page_no);//还是把它注释掉，不然基本过不了，直接在这里改为
       }
       //last最后的追加写位置不变
       return kSucc;
     }
     else
     {
-      //std::cout<<3<<std::endl;
       //原来存在但是放不下。那么首先把原来的清空，然后放入空闲块。
       unsigned long originalSize=size_map[page_no];
       char empty[originalSize];
@@ -223,7 +244,6 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   //原来并没有，那么首先查看是否能通过空闲块写入。
   else
   {
-    //std::cout<<4<<std::endl;
     pwriteByFree=pwriteByFreeBolck(compressLen,compressBuf,fd,page_no);
   }
 
@@ -231,7 +251,6 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   //如果不能通过空闲块写入，那么直接追加写
   if(!pwriteByFree)
   {
-    //std::cout<<5<<std::endl;
     size_map[page_no]=compressLen;
     ssize_t nwrite = pwrite(fd, compressBuf, compressLen, last_write);
     if (nwrite != compressLen) {
@@ -245,7 +264,6 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
 
   //最后合并空闲区。
   if(merge){
-    //std::cout<<6<<std::endl;
     mergeFree(page_no);
   }
   return kSucc;
