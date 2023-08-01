@@ -25,7 +25,7 @@ class DummyEngine : public PageEngine  {
   long long last_write=0;
   unsigned long free_blocks=0; 
   free_block *fake_head=NULL;
- 
+  
  public:
   static RetCode Open(const std::string& path, PageEngine** eptr);
 

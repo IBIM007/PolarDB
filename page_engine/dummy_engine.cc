@@ -109,6 +109,7 @@ void DummyEngine::insert_free_block(free_block *head,free_block *insert)
         {
           if(doitpre->offset+doitpre->size>=insert->offset)
           {
+            //只差这种情况没有测过了，应该也没问题，测过了
             --free_blocks;
             free_block *newhead=(free_block *)malloc(sizeof(free_block));
             newhead->offset=doitpre->offset;
@@ -207,26 +208,6 @@ void DummyEngine::insert_free_block(free_block *head,free_block *insert)
   }
 }
 
-void DummyEngine::mergeFree(uint32_t page_no)
-{
-  if(fake_head==NULL||fake_head->next==NULL)return ;
-
-  free_block *doit=fake_head;
-  free_block *doitpre=fake_head;
-  while(doit->next)
-  {
-    if((doit->offset+doit->size)>=doit->next->offset)
-    {
-        doit->size+=doit->next->size;
-        free_block *discard=doit->next;
-        doit->next=doit->next->next;
-        free(discard);
-        --free_blocks;
-    }
-    doit=doit->next;
-    if(doit==NULL)break;
-  }
-}
 bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_t page_no)
 {
   //找空闲块时实际上可以用不同的算法，1找刚好能装下的，2.找第一个能装下的立刻装了返回，3.找最大的size
@@ -235,13 +216,13 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
   free_block *doitpre=fake_head;
   //现在做简单点，找第一个能装下的立刻返回。
   //这种方式0.26
-  while(doit)
+  /*while(doit)
   {
     if(doit->size>=len)break;
     if(doit!=fake_head)doitpre=doitpre->next;
     doit=doit->next;
   }
-  if(doit==NULL)return false;
+  if(doit==NULL)return false;*/
 
   //接下来做找最大块。感觉这种性能最差，时间还可能超了
   /*size_t maxlen=doit->size;
@@ -263,7 +244,7 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
   doitpre=maxpre;*/
 
   //接下来找刚好能装下的一个块，感觉应该是效果最好的
-  /*free_block *perfect=doit;
+  free_block *perfect=doit;
   free_block *perfectpre=doitpre;
   while(doit)
   {
@@ -277,7 +258,7 @@ bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_
   }
   if(perfect->size<len)return false;
   doit=perfect;
-  doitpre=perfectpre;*/
+  doitpre=perfectpre;
 
   
   offset_map[page_no]=doit->offset;
