@@ -40,251 +40,160 @@ DummyEngine::DummyEngine(const std::string& path) {
   std::cout<<data_file<<std::endl;
   fd = open(data_file.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
   assert(fd >=0);
-  memset(size_map,-1,sizeof(size_map));
+  //memset(size_map,-1,sizeof(size_map));
+  for(int i=0;i<655362;++i)
+  {
+    start[i]=NULL;
+  }
+  //memset(offset_map,-1,sizeof(offset_map));
 }
 
 DummyEngine::~DummyEngine() {
+  std::cout<<"最后的碎片是这么多个"<<free_blocks<<std::endl;
+  unsigned long sum=0;
+  while(fake_head)
+  {
+    sum+=fake_head->size;
+    fake_head=fake_head->next;
+  }
+  std::cout<<"最后的碎片总大小是这么多"<<sum<<std::endl;
   if (fd >= 0) {
     close(fd);
   }
 }
-
+//还是可以改成头插法，毕竟把原来的地方插入后剩余的内容已经不大了，pwrite要不了几次，头插法特快。感觉可能还是按照size排序比较好？
 void DummyEngine::insert_free_block(free_block *head,free_block *insert)
 {
-  ++free_blocks;
+    ++free_blocks;
   if(head==NULL)
+  {
+    insert->next=head;
+    fake_head=insert;
+    return ;
+  }
+  free_block *doit=head;
+  free_block *doitpre=head;
+  while(doit)
+  {
+    if(doit->size<=insert->size)break;
+
+    if(doit!=head)doitpre=doit;
+    doit=doit->next;
+
+  }
+  if(doit==head)
   {
     insert->next=head;
     fake_head=insert;
   }
   else{
-    free_block *doit=head;
-    free_block *doitpre=head;
-    free_block *doitprepre=head;//新加的
-    while(doit)
+    doitpre->next=insert;
+      insert->next=doit;
+  }
+  
+}
+
+//这里还要继续改
+bool DummyEngine::pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_t page_no,unsigned long &left,free_block **last)
+{
+  free_block *doit=fake_head;
+  free_block *doitpre=fake_head;
+  while(doit)
+  {
+    if(doit->size==left)
     {
-      if(doit->offset>insert->offset)//相等的情况思考一下会不会出现，应该不可能
+      pwrite(fd,compressBuf+(len-left),left,doit->offset);
+      if((*last)!=NULL)(*last)->next=doit;
+      else 
       {
-          break;
+        *last=doit;
+        start[page_no]=doit;
+      }
+      if(doit==doitpre)
+      {
+        fake_head=fake_head->next;
       }
       else
       {
-        if(doitpre!=head)doitprepre=doitprepre->next;//新加的
-        if(doit!=head)doitpre=doitpre->next;
-        doit=doit->next;
+        doitpre->next=doit->next;
       }
+      doit->next=NULL;
+      if((*last)->next!=NULL)(*last)=(*last)->next;
+      
+      left=0;
+      return true;
     }
-    if(doit==head)//第一个的offset都比insert大
+    else if(doit->size>left)
     {
-      insert->next=doit;
-      fake_head=insert;//这个要注意，是改变fake_head的值，改变head值没用
-      //这种情况只需要考虑Insert是否能往后合并。
-      if(insert->offset+insert->size>=doit->offset)
+      
+     
+      pwrite(fd,compressBuf+(len-left),left,doit->offset);
+      if((*last)!=NULL)(*last)->next=doit;
+      else 
       {
-        --free_blocks;
-        free_block *newhead=(free_block *)malloc(sizeof(free_block));
-        newhead->offset=insert->offset;
-        newhead->size=insert->size+doit->size;
-        newhead->next=doit->next;  //next指针
-        fake_head=newhead;
-        free(insert);
-        free(doit);
+        *last=doit;
+        start[page_no]=doit;
       }
-    }
-    else
-    { 
-      //doit可能为空，
-      //一个结点时，doit就是空了，此时doitpre和doitprepre都是head。
-      //两个结点时，doit就是第二个，或者是空
-      //三个节点时，
-      doitpre->next=insert;
-      insert->next=doit;
-      //这种情况较为复杂。几种情况。
-      //如果prepre==pre，说明doit要么为空，要么就是第二个
 
-      //此时两者都是头结点
-      if(doitprepre==doitpre)
+
+      if(doit==doitpre)
       {
-        if(doit==NULL)//此时布局，doitpre，insert，null
-        {
-          if(doitpre->offset+doitpre->size>=insert->offset)
-          {
-            //只差这种情况没有测过了，应该也没问题，测过了
-            --free_blocks;
-            free_block *newhead=(free_block *)malloc(sizeof(free_block));
-            newhead->offset=doitpre->offset;
-            newhead->size=doitpre->size+insert->size;
-            newhead->next=doit;
-            fake_head=newhead;
-            free(insert);
-            free(doitpre);
-          }
-          
-        }
-        else///此时布局，doitpre(还是头)，insert，doit ....
-        {
-          bool yes=false;
-          if((doitpre->offset+doitpre->size)>=insert->offset)
-          {
-            --free_blocks;
-            free_block *newhead=(free_block *)malloc(sizeof(free_block));
-            newhead->offset=doitpre->offset;
-            newhead->size=doitpre->size+insert->size;
-            newhead->next=doit;
-            fake_head=newhead;
-            free(insert);
-            free(doitpre);
-            yes=true;
-          }
-          if(yes)//此时布局，insert和doitpre不存在。fake_head,doit....
-          {
-            doitpre=fake_head;
-            insert=fake_head;
-          }
-          //没进入上面这个，那也是doitpre,insert,doit。。。来判断insert和doit
-          if((insert->offset+insert->size)>=doit->offset)
-          {
-            --free_blocks;
-            free_block *newhead=(free_block *)malloc(sizeof(free_block));
-            newhead->offset=insert->offset;
-            newhead->size=insert->size+doit->size;
-            newhead->next=doit->next;
-            if(doitpre==insert)//此时就是head,doit这种情况。并且已经合并成一个节点了
-            {
-              fake_head=newhead;
-              free(insert);
-              free(doit);
-            }
-            else
-            {
-              doitpre->next=newhead;
-              free(insert);
-              free(doit);
-            }
-          }
-          //此时doit一定是第二个节点，就是考虑1，insert,2这三个节点合并。
-        }
+        fake_head=fake_head->next;
       }
-      else//此时布局,doitprepre,doitpre,insert,doit，doit仍然可以为空
+      else
       {
-        bool yesdo=false;
-        if(doitpre->offset+doitpre->size>=insert->offset)
-        {
-          --free_blocks;
-          free_block *newhead=(free_block *)malloc(sizeof(free_block));
-            newhead->offset=doitpre->offset;
-            newhead->size=doitpre->size+insert->size;
-            newhead->next=doit;
-            doitprepre->next=newhead;
-            free(doitpre);
-            free(insert);
-            yesdo=true;
-        }
-        //现在不知道前面合成功了还是失败了
-        if(yesdo)
-        {
-          insert=doitprepre->next;
-          doitpre=doitprepre;
-        }
-        //如果成功了，那么布局就是doitprepre,insert,doit。如果没成功doitprepre,doitpre,insert,doit。始终是想看insert和doit
-        if(doit!=NULL)
-        {
-            //此时布局是doitprepre insert doit ...
-            if(insert->offset+insert->size>=doit->offset)
-            {
-              --free_blocks;
-              free_block *newhead=(free_block *)malloc(sizeof(free_block));
-              newhead->offset=insert->offset;
-              newhead->size=insert->size+doit->size;
-              newhead->next=doit->next;
-              doitpre->next=newhead;
-              free(insert);
-              free(doit);
-            }
-        }
-        //布局就是doitprepre doitpre insert doit（可能是空也可能是节点）。合并只能是doitpre和insert和doit这几个之间
+        doitpre->next=doit->next;
       }
+      doit->next=NULL;
+      if((*last)->next!=NULL)(*last)=(*last)->next;
+
+      free_block *free_block1=(free_block *)malloc(sizeof(free_block));
+      free_block1->offset=doit->offset+left;
+      free_block1->size=doit->size-left;
+      insert_free_block(fake_head,free_block1);
+
+      doit->size=left;
+      left=0;
+      return true;
     }
+    else if(doit->size<left)
+    {
+      
+      pwrite(fd,compressBuf+(len-left),doit->size,doit->offset);
+    
+      if((*last)!=NULL)(*last)->next=doit;
+      else
+      {
+        *last=doit;
+        start[page_no]=doit;
+      } 
+
+
+ 
+      if(doit==doitpre)
+      {
+        fake_head=fake_head->next;
+      }
+      else
+      {
+        doitpre->next=doit->next;
+      }
+      
+      doit->next=NULL;
+      if((*last)->next!=NULL)(*last)=(*last)->next;
+      
+      left-=doit->size;
+      
+      
+
+    }
+    if(doit!=fake_head)doitpre=doitpre->next;
+    doit=doit->next;
+    
   }
+  return false;
 }
-
-bool DummyEngine::pwriteByFreeBlock(size_t len,Bytef *compressBuf,int fd,uint32_t page_no)
-{
-  //找空闲块时实际上可以用不同的算法，1找刚好能装下的，2.找第一个能装下的立刻装了返回，3.找最大的size
-  free_block *doit=fake_head;
-  if(doit==NULL)return false;
-  free_block *doitpre=fake_head;
-  //现在做简单点，找第一个能装下的立刻返回。
-  //这种方式0.26
-  while(doit)
-  {
-    if(doit->size>=len)break;
-    if(doit!=fake_head)doitpre=doitpre->next;
-    doit=doit->next;
-  }
-  if(doit==NULL)return false;
-
-  //接下来做找最大块。感觉这种性能最差，时间还可能超了
-  /*size_t maxlen=doit->size;
-  free_block *max=doit;
-  free_block *maxpre=doitpre;
-  while(doit)
-  {
-    if(doit->size>maxlen)
-    {
-      max=doit;
-      maxpre=doitpre;
-    }
-    if(doit!=fake_head)doitpre=doitpre->next;
-    doit=doit->next;
-  }
-  //if(max==NULL)return false;
-  if(max->size<len)return false;
-  doit=max;
-  doitpre=maxpre;*/
-
-  //接下来找刚好能装下的一个块，感觉应该是效果最好的
-  /*free_block *perfect=doit;
-  free_block *perfectpre=doitpre;
-  while(doit)
-  {
-    if(doit->size>len&&doit->size<=perfect->size)
-    {
-      perfect=doit;
-      perfectpre=doitpre;
-    }
-    if(doit!=fake_head)doitpre=doitpre->next;
-    doit=doit->next;
-  }
-  if(perfect->size<len)return false;
-  doit=perfect;
-  doitpre=perfectpre;*/
-
-  
-  offset_map[page_no]=doit->offset;
-  size_map[page_no]=len;
-
-  pwrite(fd,compressBuf,len,doit->offset);
-  doit->offset+=len;
-  doit->size=doit->size-len;
-
-  if(doit->size==0)
-  {
-    if(doit==fake_head)
-    {
-      fake_head=fake_head->next;
-      free(doit);
-    }
-    else{
-      doitpre->next=doit->next;
-      free(doit);
-    }
-    --free_blocks;
-
-  }
-  return true;
-}
-
+//37页一来直接走的空闲块读取，没有设置start
 RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   uLong len=16384;//还真的必须用uLong这样来搞
   //直接压buf不行，因为如果buf塞满就没有'\0'了，所以过渡一下用original
@@ -299,62 +208,126 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   {
     std::cout<<"压缩出错了"<<std::endl;
   }
-  //std::cout<<"此页压缩后的长度为："<<compressLen<<std::endl;
+  std::cout<<"压缩长度是"<<compressLen<<std::endl;
+
+
+  //size_map[page_no]=compressLen;
   bool pwriteByFree=false;
-  bool merge=true;
+  unsigned long left=compressLen;//还剩余多少没写完
   //说明之前已经压缩存进去过了,只有这种情况才会开始产生空洞。不管是否大于，都可以变成空闲块，然后统一用空闲块来写，代码会很简洁。
-  if(size_map[page_no]!=-1)
+  free_block *link=start[page_no];
+  free_block *last=link;//第一次写的话，last就是为空，那么第一次写还如果用空闲块写的话，那么last就没值了
+  //1通过原来的块来先写一部分
+  while(link!=NULL)
   {
-    //超时严重还是只能通过这里如果发现长度大于等于那么，直接写入。再插入空闲区。
-    bool zero=false;
-    if(size_map[page_no]>=compressLen)
+    
+    if(link->size>left)
     {
-      if(size_map[page_no]==compressLen)zero=true;
-      pwrite(fd,compressBuf,compressLen,offset_map[page_no]);
-      size_map[page_no]=compressLen;
-      if(!zero)
+      
+      //这里的compressBuf和compresslen要注意
+      pwrite(fd,compressBuf+(compressLen-left),left,link->offset);
+      //剩余的部分也必须分出去。如果不分出去，要加入realsize
+      free_block *free_block1=(free_block *)malloc(sizeof(free_block));
+      free_block1->offset=link->offset+left;
+      free_block1->size=link->size-left;
+      insert_free_block(fake_head,free_block1);//改成头插法
+
+      link->size=left;
+      free_block *after=link->next;
+      while(after)
       {
-        free_block* new_block=(free_block *)malloc(sizeof(free_block));
-        new_block->offset=offset_map[page_no]+compressLen;
-        new_block->size=size_map[page_no]-compressLen;
-        insert_free_block(fake_head,new_block);
+        free_block *next=after->next;
+        insert_free_block(fake_head,after);
+        after=next;
       }
-      return kSucc;
+      left=0;
+      link->next=NULL;
+      break;
     }
-
-    free_block* new_block=(free_block *)malloc(sizeof(free_block));
-      new_block->offset=offset_map[page_no];
-      new_block->size=size_map[page_no];
-      insert_free_block(fake_head,new_block);//只有这里面才能出现合并吧。加速可以传一个参数进去，如果是空，那么就去找，如果不是空，那么直接插入并且返回结束。
+    else if(link->size==left)
+    {
+      
+      pwrite(fd,compressBuf+(compressLen-left),left,link->offset);
+      free_block *after=link->next;
+      while(after)
+      {
+        free_block *next=after->next;
+        insert_free_block(fake_head,after);
+        after=next;
+      }
+      left=0;
+      link->next=NULL;
+      //后面的块全部变成空闲块吗？算了吧，还是留给原来的当做局部性，不行必须删了，不然读取的时候没法控制
+      break;
+    }
+    if(link->size<left)
+    {
+      
+      pwrite(fd,compressBuf+(compressLen-left),link->size,link->offset);
+      left-=link->size;
+      
+      //还有后续操作吗？
+    }
+    link=link->next;
+    if(link!=NULL)last=link;//如果link变成空，last则是最后一个块。并且left!=0，那么last刚好可以继续链接。
+    
   }
-  pwriteByFree=pwriteByFreeBlock(compressLen,compressBuf,fd,page_no);
-
-  //如果不能通过空闲块写入，那么直接追加写
-  if(!pwriteByFree)
+  //如果没有写完，还需要把pwrite里面把空闲块链接到start里面。
+  //还没写完，2然后通过空闲块再写一部分
+  if(left!=0)
   {
-    size_map[page_no]=compressLen;
-    ssize_t nwrite = pwrite(fd, compressBuf, compressLen, last_write);
-    if (nwrite != compressLen) {
+    pwriteByFree=pwriteByFreeBolck(left,compressBuf+(compressLen-left),fd,page_no,left,&last);
+  }
+
+
+  //还没写完，就追加写最后一部分。
+  if(!pwriteByFree&&left!=0)
+  { 
+    //追加写不要就分配多余的空间，多次访问才分配多余的空间
+    //如果是走了上面的原来存在页，那么追加写也多给200嘛。
+    //这后面肯定还要改，现在只是按最简单情况处理的
+    
+    ssize_t nwrite = pwrite(fd, compressBuf+(compressLen-left), left, last_write);
+    if (nwrite != left) {
      return kIOError;
     }
-
-    offset_map[page_no]=last_write;
-    last_write+=compressLen;
-    merge=false;
+    free_block *used=(free_block *)malloc(sizeof(free_block));
+    used->offset=last_write;
+    used->size=left;
+    used->next=NULL;
+    if(last!=NULL)
+    {
+      last->next=used;//这里有问题，last其实不一定有值
+    }
+    else{
+      
+      start[page_no]=used;
+    }
+    last_write+=left;
   }
+  //std::cout<<"写结束"<<std::endl;
   return kSucc;
 }
 
 RetCode DummyEngine::pageRead(uint32_t page_no, void *buf) {
   memset(buf,'\0',16384);
-  ssize_t nwrite = pread(fd, buf, size_map[page_no], offset_map[page_no]);//这里有没有可能需要更大的buf来读取
-  if (nwrite != size_map[page_no]) {
-    return kIOError;
+  free_block *link=start[page_no];
+  unsigned long already_read=0;
+  while(link)
+  {
+    
+    pread(fd,buf+already_read,link->size,link->offset);
+    already_read+=link->size;
+    link=link->next;
   }
-  uLong compressLen=size_map[page_no];
+  
+  //ssize_t nwrite = pread(fd, buf, size_map[page_no], offset_map[page_no]);//这里有没有可能需要更大的buf来读取
+  //if (nwrite != size_map[page_no]) {
+  //  return kIOError;
+  //}
   uLongf tlen=16384+1;//原本长度先定义好
   Bytef uncompressBuf[tlen];
-  if(uncompress(uncompressBuf,&tlen,(const Bytef *)((char*)buf), compressLen)!=Z_OK)
+  if(uncompress(uncompressBuf,&tlen,(const Bytef *)((char*)buf), already_read)!=Z_OK)
   {
     //return kUncompressError;
   }

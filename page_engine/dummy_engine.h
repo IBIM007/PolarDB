@@ -6,7 +6,6 @@
 #include<map>
 #include<string.h>
 #include "zlib.h"
-#include<ctime>
 /*
  * Dummy sample of page engine
  */
@@ -16,37 +15,31 @@ typedef struct FreeBlock
     size_t size;
     struct FreeBlock *next;
 }free_block;
-typedef struct JumpBlock
-{
-    free_block *real;
-}jump_block;
+
 class DummyEngine : public PageEngine  {
  private:
   int fd;
   const size_t page_size{16384};
-  short size_map[655362];
-  long long offset_map[655362];
+  //short size_map[655362];
+  free_block *start[655362];
   long long last_write=0;
   unsigned long free_blocks=0; 
   free_block *fake_head=NULL;
-  jump_block jumps[536871];
-  unsigned long jump_blocks=0; 
-  double insert_sum_time=0;
-  double pwrite_sum_time=0;
  public:
   static RetCode Open(const std::string& path, PageEngine** eptr);
 
   explicit DummyEngine(const std::string& path);
 
   ~DummyEngine() override;
-
+//这是原版的
   RetCode pageWrite(uint32_t page_no, const void *buf) override;
-
+//  RetCode pageWrite(uint32_t page_no, void *buf) override;
 
   RetCode pageRead(uint32_t page_no, void *buf) override;
   void insert_free_block(free_block *head,free_block *insert);
-  bool pwriteByFreeBlock(size_t len,Bytef *compressBuf,int fd,uint32_t page_no);
+  bool pwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_t page_no,unsigned long &left,free_block **last);
   void mergeFree(uint32_t page_no);
+  bool frePwriteByFreeBolck(size_t len,Bytef *compressBuf,int fd,uint32_t page_no);
 };
 
 #endif  // PAGE_ENGINE_DUMMY_ENGINE_H_
