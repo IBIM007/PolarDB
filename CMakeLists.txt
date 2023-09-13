@@ -22,3 +22,6 @@ target_link_libraries(random_read_write page_engine)
 
 add_executable(run_trace test/run_trace.cc)
 target_link_libraries(run_trace page_engine)
+
+add_executable(run_trace_multithread test/run_trace_multithread.cc)
+target_link_libraries(run_trace_multithread page_engine)

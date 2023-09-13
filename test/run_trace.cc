@@ -10,7 +10,7 @@
 #include <cassert>
 #include <cstring>
 #include <sstream>
-#include "../page_engine/zlib.h"
+
 /*分工，研究一下这个trace*/
 class Visitor {
  private:
