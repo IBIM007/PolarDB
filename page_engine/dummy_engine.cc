@@ -66,7 +66,7 @@ RetCode DummyEngine::pageWrite(uint32_t page_no, const void *buf) {
   char *compressBuf;
   compressBuf= (char *) memalign(getpagesize(), 16384);
   //还可以调整到1这个级别，1级别不好，试试2效果，4,5,6,7都试试
-  compressSize = ZSTD_compress(compressBuf, 16384, buf, 16384, 3);
+  compressSize = ZSTD_compress(compressBuf, 16384, buf, 16384, 1);
   //std::cout<<compressSize<<std::endl;
   real_size_map[page_no]=compressSize;
   int much=4096;
